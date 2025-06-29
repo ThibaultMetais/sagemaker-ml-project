@@ -1,0 +1,207 @@
+version: 2.1
+
+commands:
+  uv_install_packages:
+    parameters:
+      cache_key:
+        type: string
+      cache_dir:
+        type: string
+        default: /home/circleci/.cache/uv
+    steps:
+      - restore_cache:
+          name: Restore python cache
+          keys:
+            - <<parameters.cache_key>>-uv-cache-{{ checksum "uv.lock" }}
+            - <<parameters.cache_key>>-uv-cache-
+      - run:
+          name: Install python dependencies
+          command: |
+            mkdir -p "<<parameters.cache_dir>>" && \
+            uv sync --frozen --compile-bytecode --cache-dir <<parameters.cache_dir>>
+      - run:
+          name: Activate virtual environment
+          command: |
+            echo 'source .venv/bin/activate' >> $BASH_ENV
+      - run:
+          name: Clean pre-built wheels
+          command: uv cache prune --ci --cache-dir <<parameters.cache_dir>>
+      - save_cache:
+          name: Save cache
+          key: <<parameters.cache_key>>-uv-cache-{{ checksum "uv.lock" }}
+          paths:
+            - "<<parameters.cache_dir>>"
+            - ".venv"
+
+workflows:
+  version: 2
+  build-test-deploy:
+    jobs:
+      - lint-and-test
+      - hold-training:
+          type: approval
+          filters:
+            branches:
+              ignore:
+                - staging
+                - production
+      - train:
+          requires:
+            - hold-training
+          filters:
+            branches:
+              ignore:
+                - staging
+                - production
+      - hold-dev-deployment:
+          type: approval
+          requires:
+            - train
+          filters:
+            branches:
+              ignore:
+                - staging
+                - production
+      - hold-staging-deployment:
+          type: approval
+          requires:
+            - lint-and-test
+          filters:
+            branches:
+              only: staging
+      - hold-production-deployment:
+          type: approval
+          requires:
+            - lint-and-test
+          filters:
+            branches:
+              only: production
+      - deploy-dev:
+          requires:
+            - hold-dev-deployment
+          filters:
+            branches:
+              ignore:
+                - staging
+                - production
+      - deploy-staging:
+          requires:
+            - hold-staging-deployment
+          filters:
+            branches:
+              only: staging
+      - deploy-prod:
+          requires:
+            - hold-production-deployment
+          filters:
+            branches:
+              only: production
+
+jobs:
+  lint-and-test:
+    docker:
+      - image: cimg/python:3.11-node
+    steps:
+      - checkout
+      - run:
+          name: Install uv
+          command: |
+            pip install uv
+      - uv_install_packages:
+          cache_key: lint-test
+      - run:
+          name: Run ruff format
+          command: ruff format --check .
+      - run:
+          name: Run ruff check
+          command: ruff check .
+      - run:
+          name: Run tests with coverage
+          command: |
+            python -m pytest --cov=. --cov-report=xml --junitxml=test-results/junit.xml -xvs tests/
+      - store_test_results:
+          path: test-results
+      - store_artifacts:
+          path: coverage.xml
+          destination: coverage-report
+
+  train:
+    docker:
+      - image: cimg/python:3.11
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: Install AWS CLI
+          command: |
+            sudo apt-get update && sudo apt-get install -y awscli
+      - run:
+          name: Install uv
+          command: |
+            pip install uv
+      - uv_install_packages:
+          cache_key: train
+      - run:
+          name: Run training with docker support
+          command: uv run estimator.py --register-model
+          no_output_timeout: 60m
+
+  deploy-dev:
+    docker:
+      - image: cimg/python:3.11
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: Install AWS CLI
+          command: |
+            sudo apt-get update && sudo apt-get install -y awscli
+      - run:
+          name: Install uv
+          command: |
+            pip install uv
+      - uv_install_packages:
+          cache_key: deploy
+      - run: 
+          name: Deploy to Development Environment
+          command: python deploy.py --env dev
+
+  deploy-staging:
+    docker:
+      - image: cimg/python:3.11
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: Install AWS CLI
+          command: |
+            sudo apt-get update && sudo apt-get install -y awscli
+      - run:
+          name: Install uv
+          command: |
+            pip install uv
+      - uv_install_packages:
+          cache_key: deploy
+      - run: 
+          name: Deploy to Staging Environment
+          command: python deploy.py --env staging
+
+  deploy-prod:
+    docker:
+      - image: cimg/python:3.11
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: Install AWS CLI
+          command: |
+            sudo apt-get update && sudo apt-get install -y awscli
+      - run:
+          name: Install uv
+          command: |
+            pip install uv
+      - uv_install_packages:
+          cache_key: deploy
+      - run: 
+          name: Deploy to Production Environment
+          command: python deploy.py --env prod
