@@ -1,8 +1,8 @@
+import hashlib
+import shutil
 import subprocess
 import tempfile
-import shutil
 from pathlib import Path
-import hashlib
 
 
 def generate_requirements_with_uv(pyproject_path: Path, uv_lock_path: Path):
@@ -48,7 +48,7 @@ def rebuild_training_image_if_requirements_changed(
     Parameters:
         requirements_path (Path): Path to the generated requirements file.
         hash_file_path (Path): File path to store the last known hash of the requirements file.
-        build_script (str): Shell script to run the training image build process.
+        build_script (Path): Shell script to run the training image build process.
 
     Returns:
         bool: True if the training image was rebuilt (i.e. changes detected), False otherwise.
@@ -71,12 +71,13 @@ def rebuild_training_image_if_requirements_changed(
     if current_hash != previous_hash:
         print("Changes detected in requirements. Rebuilding training image...")
         try:
-            subprocess.run(["bash", build_script], check=True)
+            subprocess.run(["bash", str(build_script)], check=True)
             # After a successful build, update the stored hash.
             hash_file_path.write_text(current_hash)
             return True
         except subprocess.CalledProcessError as e:
             print(f"Build script failed: {e}")
+            # Don't update the hash if the build failed
             return False
     else:
         print("No changes detected in requirements. Skipping rebuild.")

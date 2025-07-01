@@ -31,7 +31,7 @@ fi
 IMAGE_NAME="$MODEL_NAME"
 # Get the tag from version.txt
 TAG=$(cat version.txt)
-ECR_REPO="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME"
+ECR_REPO="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_TRAINING_REPO_NAME"
 
 echo "Building and publishing image: $ECR_REPO:$IMAGE_NAME"
 

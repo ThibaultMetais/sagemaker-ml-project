@@ -1,11 +1,13 @@
 import argparse
-from distutils.util import strtobool
 import os
+from pathlib import Path
+
+import joblib
+import mlflow
 import pandas as pd
+from mlflow.models import infer_signature
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import balanced_accuracy_score
-import mlflow
-from mlflow.models import infer_signature
 
 from config import Config
 
@@ -19,7 +21,7 @@ MLFLOW_TRACKING_URI = config.get_mlflow_tracking_uri()
 model_version = config.get_model_version()
 
 
-def train(train_path, test_path, params, register_model: bool = False):
+def train(train_path, test_path, params, model_dir, register_model: bool = False):
     print("Reading data")
     train_df = pd.read_csv(train_path)
     test_df = pd.read_csv(test_path)
@@ -33,7 +35,7 @@ def train(train_path, test_path, params, register_model: bool = False):
     print("Training model")
     # Set MLflow tracking URI and experiment settings.
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(f"{config.MODEL_NAME}-example")
+    mlflow.set_experiment(f"{config.MODEL_NAME}")
 
     model = RandomForestClassifier(
         n_estimators=params["n_estimators"],
@@ -52,26 +54,22 @@ def train(train_path, test_path, params, register_model: bool = False):
 
     with mlflow.start_run():
         mlflow.log_params(params)
-        mlflow.log_metrics(
-            {"bal_acc_train": bal_acc_train, "bal_acc_test": bal_acc_test}
+        mlflow.log_metrics({"bal_acc_train": bal_acc_train, "bal_acc_test": bal_acc_test})
+
+        # Infer the model signature for later model serving.
+        signature = infer_signature(X_train, model.predict(X_train))
+
+        # Log the model WITHOUT automatic registration.
+        logged_model = mlflow.sklearn.log_model(
+            sk_model=model,
+            artifact_path="model",
+            signature=signature,
+            input_example=X_train,
         )
 
         if register_model:
-            # Infer the model signature for later model serving.
-            signature = infer_signature(X_train, model.predict(X_train))
-
-            # Log the model WITHOUT automatic registration.
-            logged_model = mlflow.sklearn.log_model(
-                sk_model=model,
-                artifact_path="model",
-                signature=signature,
-                input_example=X_train,
-            )
-
             # Now explicitly register the model. This call registers it once and returns a ModelVersion object.
-            registered_model = mlflow.register_model(
-                logged_model.model_uri, REGISTERED_MODEL_NAME
-            )
+            registered_model = mlflow.register_model(logged_model.model_uri, REGISTERED_MODEL_NAME)
 
             # Set your custom semantic version tag.
             client = mlflow.tracking.MlflowClient()
@@ -81,6 +79,12 @@ def train(train_path, test_path, params, register_model: bool = False):
                 key="semver",
                 value=model_version,
             )
+
+            print(f"Model registered with version {registered_model.version}, tagged with {model_version}")
+
+    # Save the model to the model directory
+    Path(model_dir).mkdir(parents=True, exist_ok=True)
+    joblib.dump(model, model_dir + "/model.pkl")
 
 
 if __name__ == "__main__":
@@ -101,14 +105,12 @@ if __name__ == "__main__":
     # Optional flag to register the model in SageMaker Registry.
     parser.add_argument(
         "--register-model",
-        type=str,
-        default="False",
+        action="store_true",
         help="Register model in SageMaker Model Registry",
     )
     args, _ = parser.parse_known_args()
 
-    # Convert the register-model argument to a boolean
-    register_model = bool(strtobool(args.register_model))
+    register_model = args.register_model
 
     params = {
         "n_estimators": args.n_estimators,
@@ -119,5 +121,6 @@ if __name__ == "__main__":
         os.path.join(args.train, args.train_file),
         os.path.join(args.test, args.test_file),
         params,
+        args.model_dir,
         register_model=register_model,
     )

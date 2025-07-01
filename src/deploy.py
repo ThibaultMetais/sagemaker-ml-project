@@ -1,19 +1,15 @@
 import argparse
-from pathlib import Path
-import boto3
 import subprocess
+from pathlib import Path
+
+import boto3
 import docker
 import mlflow
 import mlflow.deployments
-from mlflow.tracking import MlflowClient
 from botocore.exceptions import ClientError
+from mlflow.tracking import MlflowClient
 
 from config import Config
-
-
-def get_aws_account_id() -> str:
-    sts = boto3.client("sts")
-    return sts.get_caller_identity()["Account"]
 
 
 def ensure_ecr_repo_exists(ecr_client, repo_name: str):
@@ -30,9 +26,7 @@ def ensure_ecr_repo_exists(ecr_client, repo_name: str):
 
 def image_exists_in_ecr(ecr_client, repo_name: str, tag: str) -> bool:
     try:
-        response = ecr_client.describe_images(
-            repositoryName=repo_name, imageIds=[{"imageTag": tag}]
-        )
+        response = ecr_client.describe_images(repositoryName=repo_name, imageIds=[{"imageTag": tag}])
         return len(response["imageDetails"]) > 0
     except ClientError as e:
         if e.response["Error"]["Code"] == "ImageNotFoundException":
@@ -43,8 +37,7 @@ def image_exists_in_ecr(ecr_client, repo_name: str, tag: str) -> bool:
 def docker_login_to_ecr(aws_account_id: str, region: str):
     ecr_uri = f"{aws_account_id}.dkr.ecr.{region}.amazonaws.com"
     subprocess.run(
-        f"aws ecr get-login-password --region {region} | "
-        f"docker login --username AWS --password-stdin {ecr_uri}",
+        f"aws ecr get-login-password --region {region} | docker login --username AWS --password-stdin {ecr_uri}",
         shell=True,
         check=True,
     )
@@ -72,7 +65,7 @@ def get_model_uri_from_semver(registered_model_name, desired_semver):
 
 # This is incredibly fragile, and seems to be the only way to build Docker V2 manifests.
 def build_mlflow_container(model_uri: str, image_name: str):
-    Path(".deploy").mkdir(parents=True, exist_ok=True)
+    Path(Path(__file__).parent.parent / ".deploy").mkdir(parents=True, exist_ok=True)
 
     subprocess.run(
         [
@@ -82,7 +75,7 @@ def build_mlflow_container(model_uri: str, image_name: str):
             "-m",
             model_uri,
             "-d",
-            str(Path(__file__).parent / ".deploy"),
+            str(Path(__file__).parent.parent / ".deploy"),
         ],
         check=True,
     )
@@ -97,7 +90,7 @@ def build_mlflow_container(model_uri: str, image_name: str):
             "type=image,push=false,oci-mediatypes=false",
             "-t",
             image_name,
-            ".deploy/.",
+            str(Path(__file__).parent.parent / ".deploy"),
         ],
         check=True,
     )
@@ -135,10 +128,10 @@ def deploy_to_sagemaker(
     )
 
 
-if __name__ == "__main__":
+def main():
     # Get configuration
     config = Config()
-    
+
     # get parameters from command line
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default="dev")
@@ -163,9 +156,9 @@ if __name__ == "__main__":
     ecr_repo_name = config.MODEL_NAME
 
     # Derived values
-    aws_account_id = get_aws_account_id()
+    aws_account_id = config.AWS_ACCOUNT_ID
     ecr_client = boto3.client("ecr", region_name=aws_region)
-    ecr_image_uri = f"{aws_account_id}.dkr.ecr.{aws_region}.amazonaws.com/{ecr_repo_name}:{model_version}"
+    ecr_image_uri = f"{config.ECR_URI}/{ecr_repo_name}:{model_version}"
     local_image_tag = f"{ecr_repo_name}:latest"
 
     # Workflow
@@ -192,3 +185,7 @@ if __name__ == "__main__":
     )
 
     print(f"Model deployed to SageMaker endpoint: {sagemaker_endpoint_name}")
+
+
+if __name__ == "__main__":
+    main()

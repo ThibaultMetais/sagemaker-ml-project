@@ -1,9 +1,10 @@
 import time
+
 import sagemaker
 from sagemaker.tuner import IntegerParameter
 
 from config import Config
-from estimator import sklearn_estimator
+from estimator import build_estimator
 
 # Get configuration
 config = Config()
@@ -19,7 +20,7 @@ hyperparameter_ranges = {
 
 # Create Optimizer
 Optimizer = sagemaker.tuner.HyperparameterTuner(
-    estimator=sklearn_estimator,
+    estimator=build_estimator(register_model=False),
     hyperparameter_ranges=hyperparameter_ranges,
     base_tuning_job_name=f"{config.MODEL_NAME}-tuner",
     objective_type="Maximize",

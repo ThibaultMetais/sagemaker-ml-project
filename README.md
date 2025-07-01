@@ -16,7 +16,6 @@ cp env.example .env
 2. Edit the `.env` file with your actual values. **The following variables are REQUIRED**:
 ```bash
 # AWS Configuration (REQUIRED)
-AWS_ACCOUNT_ID=your-aws-account-id
 AWS_REGION=us-east-1
 
 # S3 Configuration (REQUIRED)
@@ -75,14 +74,14 @@ python deploy.py --env production
 
 This project has been reorganized into two main components:
 
-1. **ai_roster**: Model-specific code for an XGBoost regression model
+1. ??? : Model-specific code for an XGBoost regression model
 2. **sagemaker_utils**: Reusable SageMaker utilities that can be transferred to other projects
 
 ### Directory Structure
 
 ```
 .
-├── ai_roster/                     # Model-specific code
+├──  ???/                     # Model-specific code
 │   ├── training/                  # Training code for the XGBoost model
 │   │   ├── hyperparameters.py     # XGBoost hyperparameter configurations
 │   │   ├── train.py               # SageMaker training script
@@ -145,7 +144,7 @@ python examples/train_and_deploy.py \
 
 ## Project Modules
 
-### ai_roster
+### ???
 
 Contains model-specific code for your XGBoost model:
 
@@ -167,7 +166,7 @@ Contains reusable SageMaker utilities that can be used across projects:
 
 ### Adding New Models
 
-To add a new model, create a new module in the `ai_roster` directory with the appropriate training code and hyperparameters.
+To add a new model, create a new module in the `???` directory with the appropriate training code and hyperparameters.
 
 ### Contributing to SageMaker Utilities
 

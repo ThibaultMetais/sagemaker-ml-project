@@ -143,7 +143,7 @@ jobs:
           cache_key: train
       - run:
           name: Run training with docker support
-          command: uv run estimator.py --register-model
+          command: uv run src/estimator.py --register-model
           no_output_timeout: 60m
 
   deploy-dev:

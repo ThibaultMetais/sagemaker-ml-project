@@ -161,23 +161,6 @@ env/
 env.bak/
 venv.bak/
 
-# IDE specific files
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-.project
-.pydevproject
-.settings/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-*.ipynb
-
-# Local development
-.DS_Store
-Thumbs.db 
-
 # MLFlow
 mlruns/
+*.deploy/
