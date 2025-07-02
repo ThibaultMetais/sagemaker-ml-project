@@ -4,6 +4,14 @@ Unit tests for the config.py module.
 This module contains comprehensive tests for the Config class and related functionality,
 including environment variable handling, AWS service interactions, and configuration
 management across different environments.
+
+The tests cover:
+- Environment variable validation and defaults
+- AWS service integration (STS, S3, ECR)
+- Configuration property access and caching
+- Environment-specific configuration classes
+- File-based configuration (version files, requirements)
+- Error handling for missing or invalid configuration
 """
 
 import os
@@ -15,23 +23,43 @@ from config import Config, DevConfig, ProductionConfig, StagingConfig, _get_env_
 
 
 class TestGetEnvOrRaise:
-    """Test cases for the _get_env_or_raise helper function."""
+    """
+    Test cases for the _get_env_or_raise helper function.
+
+    This class tests the utility function that safely retrieves environment
+    variables and raises appropriate errors when they are missing or empty.
+    """
 
     def test_get_env_or_raise_with_valid_env_var(self):
-        """Test that _get_env_or_raise returns the environment variable value when it exists."""
+        """
+        Test that _get_env_or_raise returns the environment variable value when it exists.
+
+        This test verifies that the function correctly retrieves and returns
+        environment variable values when they are properly set.
+        """
         with patch.dict(os.environ, {"TEST_VAR": "test_value"}):
             result = _get_env_or_raise("TEST_VAR")
             assert result == "test_value"
 
     def test_get_env_or_raise_with_missing_env_var(self):
-        """Test that _get_env_or_raise raises ValueError when environment variable is missing."""
+        """
+        Test that _get_env_or_raise raises ValueError when environment variable is missing.
+
+        This test ensures that the function properly handles missing environment
+        variables by raising a descriptive ValueError.
+        """
         with patch.dict(os.environ, {}, clear=True), pytest.raises(
             ValueError, match="TEST_VAR environment variable is required"
         ):
             _get_env_or_raise("TEST_VAR")
 
     def test_get_env_or_raise_with_empty_env_var(self):
-        """Test that _get_env_or_raise raises ValueError when environment variable is empty."""
+        """
+        Test that _get_env_or_raise raises ValueError when environment variable is empty.
+
+        This test verifies that empty environment variables are treated the same
+        as missing ones, ensuring consistent error handling.
+        """
         with patch.dict(os.environ, {"TEST_VAR": ""}), pytest.raises(
             ValueError, match="TEST_VAR environment variable is required"
         ):
@@ -39,163 +67,299 @@ class TestGetEnvOrRaise:
 
 
 class TestConfig:
-    """Test cases for the main Config class."""
+    """
+    Test cases for the main Config class.
+
+    This class contains comprehensive tests for all properties and methods
+    of the Config class, including AWS service integration, environment
+    variable handling, and configuration management.
+    """
 
     def test_aws_account_id_property(self, mock_aws_services):
-        """Test that AWS_ACCOUNT_ID property returns the correct account ID."""
+        """
+        Test that AWS_ACCOUNT_ID property returns the correct account ID.
+
+        This test verifies that the property correctly retrieves the AWS
+        account ID from the STS service using mocked AWS services.
+        """
         config = Config()
         assert config.AWS_ACCOUNT_ID == "123456789012"
 
     def test_aws_region_property_with_env_var(self):
-        """Test that AWS_REGION property returns environment variable value when set."""
+        """
+        Test that AWS_REGION property returns environment variable value when set.
+
+        This test verifies that the property correctly reads the AWS region
+        from environment variables when they are provided.
+        """
         with patch.dict(os.environ, {"AWS_REGION": "us-west-2"}):
             config = Config()
             assert config.AWS_REGION == "us-west-2"
 
     def test_aws_region_property_without_env_var(self):
-        """Test that AWS_REGION property returns default value when environment variable is not set."""
+        """
+        Test that AWS_REGION property returns default value when environment variable is not set.
+
+        This test ensures that the property falls back to the default value
+        when the environment variable is not provided.
+        """
         with patch.dict(os.environ, {}, clear=True):
             config = Config()
             assert config.AWS_REGION == "us-east-1"
 
     def test_s3_bucket_name_property_with_env_var(self):
-        """Test that S3_BUCKET_NAME property returns environment variable value."""
+        """
+        Test that S3_BUCKET_NAME property returns environment variable value.
+
+        This test verifies that the property correctly reads the S3 bucket
+        name from environment variables.
+        """
         with patch.dict(os.environ, {"S3_BUCKET_NAME": "my-test-bucket"}):
             config = Config()
             assert config.S3_BUCKET_NAME == "my-test-bucket"
 
     def test_s3_bucket_name_property_without_env_var(self):
-        """Test that S3_BUCKET_NAME property raises ValueError when environment variable is missing."""
+        """
+        Test that S3_BUCKET_NAME property raises ValueError when environment variable is missing.
+
+        This test ensures that the property properly handles missing required
+        environment variables by raising a descriptive error.
+        """
         with patch.dict(os.environ, {}, clear=True):
             config = Config()
             with pytest.raises(ValueError, match="S3_BUCKET_NAME environment variable is required"):
                 _ = config.S3_BUCKET_NAME
 
     def test_s3_bucket_uri_property(self):
-        """Test that S3_BUCKET_URI property constructs correct S3 URI."""
+        """
+        Test that S3_BUCKET_URI property constructs correct S3 URI.
+
+        This test verifies that the property correctly constructs the full
+        S3 URI from the bucket name.
+        """
         with patch.dict(os.environ, {"S3_BUCKET_NAME": "my-test-bucket"}):
             config = Config()
             assert config.S3_BUCKET_URI == "s3://my-test-bucket"
 
     def test_deployment_bucket_prefix_property_with_env_var(self):
-        """Test that DEPLOYMENT_BUCKET_PREFIX property returns environment variable value when set."""
+        """
+        Test that DEPLOYMENT_BUCKET_PREFIX property returns environment variable value when set.
+
+        This test verifies that the property correctly reads the deployment
+        bucket prefix from environment variables.
+        """
         with patch.dict(os.environ, {"DEPLOYMENT_BUCKET_PREFIX": "custom-prefix"}):
             config = Config()
             assert config.DEPLOYMENT_BUCKET_PREFIX == "custom-prefix"
 
     def test_deployment_bucket_prefix_property_without_env_var(self):
-        """Test that DEPLOYMENT_BUCKET_PREFIX property returns default value when environment variable is not set."""
+        """
+        Test that DEPLOYMENT_BUCKET_PREFIX property returns default value when environment variable is not set.
+
+        This test ensures that the property falls back to the default value
+        when the environment variable is not provided.
+        """
         with patch.dict(os.environ, {}, clear=True):
             config = Config()
             assert config.DEPLOYMENT_BUCKET_PREFIX == "sagemaker-models"
 
     def test_ecr_training_repo_name_property_with_env_var(self):
-        """Test that ECR_TRAINING_REPO_NAME property returns environment variable value when set."""
+        """
+        Test that ECR_TRAINING_REPO_NAME property returns environment variable value when set.
+
+        This test verifies that the property correctly reads the ECR repository
+        name from environment variables.
+        """
         with patch.dict(os.environ, {"ECR_TRAINING_REPO_NAME": "custom/repo"}):
             config = Config()
             assert config.ECR_TRAINING_REPO_NAME == "custom/repo"
 
     def test_ecr_training_repo_name_property_without_env_var(self):
-        """Test that ECR_TRAINING_REPO_NAME property returns default value when environment variable is not set."""
+        """
+        Test that ECR_TRAINING_REPO_NAME property returns default value when environment variable is not set.
+
+        This test ensures that the property falls back to the default value
+        when the environment variable is not provided.
+        """
         with patch.dict(os.environ, {}, clear=True):
             config = Config()
             assert config.ECR_TRAINING_REPO_NAME == "sagemaker/training_images"
 
     def test_ecr_uri_property(self, mock_aws_services):
-        """Test that ECR_URI property constructs correct ECR URI."""
+        """
+        Test that ECR_URI property constructs correct ECR URI.
+
+        This test verifies that the property correctly constructs the full
+        ECR registry URI from the AWS account ID and region.
+        """
         config = Config()
         expected_uri = "123456789012.dkr.ecr.us-east-1.amazonaws.com"
         assert expected_uri == config.ECR_URI
 
     def test_sagemaker_role_arn_property_with_env_var(self):
-        """Test that SAGEMAKER_ROLE_ARN property returns environment variable value."""
+        """
+        Test that SAGEMAKER_ROLE_ARN property returns environment variable value.
+
+        This test verifies that the property correctly reads the SageMaker
+        execution role ARN from environment variables.
+        """
         with patch.dict(os.environ, {"SAGEMAKER_ROLE_ARN": "arn:aws:iam::123456789012:role/test-role"}):
             config = Config()
             assert config.SAGEMAKER_ROLE_ARN == "arn:aws:iam::123456789012:role/test-role"
 
     def test_sagemaker_role_arn_property_without_env_var(self):
-        """Test that SAGEMAKER_ROLE_ARN property raises ValueError when environment variable is missing."""
+        """
+        Test that SAGEMAKER_ROLE_ARN property raises ValueError when environment variable is missing.
+
+        This test ensures that the property properly handles missing required
+        environment variables by raising a descriptive error.
+        """
         with patch.dict(os.environ, {}, clear=True):
             config = Config()
             with pytest.raises(ValueError, match="SAGEMAKER_ROLE_ARN environment variable is required"):
                 _ = config.SAGEMAKER_ROLE_ARN
 
     def test_mlflow_tracking_uri_property_with_env_var(self):
-        """Test that MLFLOW_TRACKING_URI property returns environment variable value."""
+        """
+        Test that MLFLOW_TRACKING_URI property returns environment variable value.
+
+        This test verifies that the property correctly reads the MLflow
+        tracking server URI from environment variables.
+        """
         with patch.dict(os.environ, {"MLFLOW_TRACKING_URI": "http://localhost:5000"}):
             config = Config()
             assert config.MLFLOW_TRACKING_URI == "http://localhost:5000"
 
     def test_mlflow_tracking_uri_property_without_env_var(self):
-        """Test that MLFLOW_TRACKING_URI property raises ValueError when environment variable is missing."""
+        """
+        Test that MLFLOW_TRACKING_URI property raises ValueError when environment variable is missing.
+
+        This test ensures that the property properly handles missing required
+        environment variables by raising a descriptive error.
+        """
         with patch.dict(os.environ, {}, clear=True):
             config = Config()
             with pytest.raises(ValueError, match="MLFLOW_TRACKING_URI environment variable is required"):
                 _ = config.MLFLOW_TRACKING_URI
 
     def test_model_name_property_with_env_var(self):
-        """Test that MODEL_NAME property returns environment variable value when set."""
+        """
+        Test that MODEL_NAME property returns environment variable value when set.
+
+        This test verifies that the property correctly reads the model name
+        from environment variables.
+        """
         with patch.dict(os.environ, {"MODEL_NAME": "custom-model"}):
             config = Config()
             assert config.MODEL_NAME == "custom-model"
 
     def test_model_name_property_without_env_var(self):
-        """Test that MODEL_NAME property returns default value when environment variable is not set."""
+        """
+        Test that MODEL_NAME property returns default value when environment variable is not set.
+
+        This test ensures that the property falls back to the default value
+        when the environment variable is not provided.
+        """
         with patch.dict(os.environ, {}, clear=True):
             config = Config()
             assert config.MODEL_NAME == "my-example-project"
 
     def test_default_training_instance_type_property_with_env_var(self):
-        """Test that DEFAULT_TRAINING_INSTANCE_TYPE property returns environment variable value when set."""
+        """
+        Test that DEFAULT_TRAINING_INSTANCE_TYPE property returns environment variable value when set.
+
+        This test verifies that the property correctly reads the training
+        instance type from environment variables.
+        """
         with patch.dict(os.environ, {"DEFAULT_TRAINING_INSTANCE_TYPE": "ml.p3.2xlarge"}):
             config = Config()
             assert config.DEFAULT_TRAINING_INSTANCE_TYPE == "ml.p3.2xlarge"
 
     def test_default_training_instance_type_property_without_env_var(self):
-        """Test that DEFAULT_TRAINING_INSTANCE_TYPE property returns default value when env var is not set."""
+        """
+        Test that DEFAULT_TRAINING_INSTANCE_TYPE property returns default value when env var is not set.
+
+        This test ensures that the property falls back to the default value
+        when the environment variable is not provided.
+        """
         with patch.dict(os.environ, {}, clear=True):
             config = Config()
             assert config.DEFAULT_TRAINING_INSTANCE_TYPE == "ml.c5.xlarge"
 
     def test_default_inference_instance_type_property_with_env_var(self):
-        """Test that DEFAULT_INFERENCE_INSTANCE_TYPE property returns environment variable value when set."""
+        """
+        Test that DEFAULT_INFERENCE_INSTANCE_TYPE property returns environment variable value when set.
+
+        This test verifies that the property correctly reads the inference
+        instance type from environment variables.
+        """
         with patch.dict(os.environ, {"DEFAULT_INFERENCE_INSTANCE_TYPE": "ml.c5.2xlarge"}):
             config = Config()
             assert config.DEFAULT_INFERENCE_INSTANCE_TYPE == "ml.c5.2xlarge"
 
     def test_default_inference_instance_type_property_without_env_var(self):
-        """Test that DEFAULT_INFERENCE_INSTANCE_TYPE property returns default value when env var is not set."""
+        """
+        Test that DEFAULT_INFERENCE_INSTANCE_TYPE property returns default value when env var is not set.
+
+        This test ensures that the property falls back to the default value
+        when the environment variable is not provided.
+        """
         with patch.dict(os.environ, {}, clear=True):
             config = Config()
             assert config.DEFAULT_INFERENCE_INSTANCE_TYPE == "ml.m5.large"
 
     def test_default_instance_count_property_with_env_var(self):
-        """Test that DEFAULT_INSTANCE_COUNT property returns environment variable value when set."""
+        """
+        Test that DEFAULT_INSTANCE_COUNT property returns environment variable value when set.
+
+        This test verifies that the property correctly reads and converts
+        the instance count from environment variables to an integer.
+        """
         with patch.dict(os.environ, {"DEFAULT_INSTANCE_COUNT": "3"}):
             config = Config()
             assert config.DEFAULT_INSTANCE_COUNT == 3
 
     def test_default_instance_count_property_without_env_var(self):
-        """Test that DEFAULT_INSTANCE_COUNT property returns default value when environment variable is not set."""
+        """
+        Test that DEFAULT_INSTANCE_COUNT property returns default value when environment variable is not set.
+
+        This test ensures that the property falls back to the default value
+        when the environment variable is not provided.
+        """
         with patch.dict(os.environ, {}, clear=True):
             config = Config()
             assert config.DEFAULT_INSTANCE_COUNT == 1
 
     def test_default_instance_count_property_with_invalid_env_var(self):
-        """Test that DEFAULT_INSTANCE_COUNT property handles invalid environment variable values."""
+        """
+        Test that DEFAULT_INSTANCE_COUNT property handles invalid environment variable values.
+
+        This test ensures that the property properly handles invalid integer
+        values in environment variables by raising a ValueError.
+        """
         with patch.dict(os.environ, {"DEFAULT_INSTANCE_COUNT": "invalid"}), pytest.raises(ValueError):
             config = Config()
             _ = config.DEFAULT_INSTANCE_COUNT
 
     def test_default_hyperparameters_property_with_env_vars(self):
-        """Test that DEFAULT_HYPERPARAMETERS property returns correct values when environment variables are set."""
+        """
+        Test that DEFAULT_HYPERPARAMETERS property returns correct values when environment variables are set.
+
+        This test verifies that the property correctly reads and converts
+        hyperparameter values from environment variables.
+        """
         with patch.dict(os.environ, {"N_ESTIMATORS": "200", "MIN_SAMPLES_LEAF": "5"}):
             config = Config()
             expected = {"n-estimators": 200, "min-samples-leaf": 5}
             assert expected == config.DEFAULT_HYPERPARAMETERS
 
     def test_default_hyperparameters_property_without_env_vars(self):
-        """Test that DEFAULT_HYPERPARAMETERS property returns default values when environment variables are not set."""
+        """
+        Test that DEFAULT_HYPERPARAMETERS property returns default values when environment variables are not set.
+
+        This test ensures that the property falls back to default values
+        when environment variables are not provided.
+        """
         with patch.dict(os.environ, {}, clear=True):
             config = Config()
             expected = {"n-estimators": 100, "min-samples-leaf": 3}
