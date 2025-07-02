@@ -146,7 +146,7 @@ class TestRebuildTrainingImageIfRequirementsChanged:
     def test_rebuild_when_hash_file_missing(self, temp_files, mock_subprocess):
         """Test that rebuild occurs when hash file doesn't exist."""
         requirements_path = temp_files["requirements_file"]
-        hash_file_path = Path("nonexistent_hash.txt")
+        hash_file_path = temp_files["temp_dir"] / "nonexistent_hash.txt"
 
         # Ensure the hash file doesn't exist
         if hash_file_path.exists():
